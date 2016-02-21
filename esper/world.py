@@ -1,6 +1,7 @@
 import esper
 
 from functools import lru_cache
+from multiprocessing import Manager
 
 
 class World:
@@ -157,6 +158,36 @@ class World:
         """Process all Systems, in order of their priority."""
         for processor in self._processors:
             processor.process(*args)
+
+
+class ParallelWorld(World):
+    def __init__(self):
+        super().__init__()
+        self._manager = Manager()
+        self._components = self._manager.dict()
+        self._entities = self._manager.dict()
+
+    def add_processor(self, processor_instance, priority=0):
+        """Add a Processor instance to the world. """
+        assert issubclass(processor_instance.__class__,
+                          (esper.Processor, esper.ParallelProcessor))
+        processor_instance.priority = priority
+        processor_instance.world = self
+        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
+            processor_instance.daemon = True
+            processor_instance.start()
+        self._processors.append(processor_instance)
+        self._processors.sort(key=lambda processor: -processor.priority)
+
+    def remove_processor(self, processor_type):
+        """Remove a Processor from the world, by type. """
+        for processor in self._processors:
+            if type(processor) == processor_type:
+                processor.world = None
+                if issubclass(processor.__class__, esper.ParallelProcessor):
+                    processor.terminate()
+                    processor.join()
+                self._processors.remove(processor)
 
 
 class CachedWorld(World):

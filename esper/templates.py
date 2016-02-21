@@ -1,3 +1,4 @@
+import multiprocessing
 
 
 class Processor:
@@ -8,3 +9,11 @@ class Processor:
         raise NotImplementedError
 
 
+# TODO: inherrit from proper MultiProcessing class.
+class ParallelProcessor(multiprocessing.Process):
+    def __init__(self):
+        super().__init__()
+        self.world = None
+
+    def process(self, *args):
+        raise NotImplementedError
