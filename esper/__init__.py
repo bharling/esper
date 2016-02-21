@@ -1,5 +1,5 @@
-from .world import CachedWorld, World
-from .templates import Processor
+from .world import World, CachedWorld, ParallelWorld
+from .templates import Processor, ParallelProcessor
 
 from .meta import (author as __author__,
                    version as __version__,
@@ -7,4 +7,4 @@ from .meta import (author as __author__,
 
 __copyright__ = __author__
 
-__all__ = ("CachedWorld", "Processor", "World")
+__all__ = ("Processor", "ParallelProcessor", "World", "CachedWorld", "ParallelWorld")
