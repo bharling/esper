@@ -22,14 +22,14 @@ class Position:
 ##########################
 #  Define some Processors:
 ##########################
-class ReportProcessor(esper.Processor):
+class MovementProcessor(esper.Processor):
     def __init__(self):
         super().__init__()
 
     def process(self):
-        for ent, vel in self.world.get_component(Velocity):
-            returned_vel = vel
-            print("Returned values:", returned_vel.x, returned_vel.y)
+        for ent, (vel, pos) in self.world.get_components(Velocity, Position):
+            vel.y += 1
+            print("Local", vel.y)
 
 
 class GravityProcessor(esper.ParallelProcessor):
@@ -37,19 +37,9 @@ class GravityProcessor(esper.ParallelProcessor):
         super().__init__()
 
     def process(self):
-        print("Processing", self.name)
-        for ent, (vel, pos) in self.world.get_components(Velocity, Position):
-            vel.y += 1
-
-
-class RelayProcessor(esper.ParallelProcessor):
-    def __init__(self):
-        super().__init__()
-
-    def process(self):
-        print("Processing", self.name)
         for ent, vel in self.world.get_component(Velocity):
-            vel.x += 1
+            vel.y += 1
+            print("Multicore", vel.y)
 
 
 ###############
@@ -66,23 +56,32 @@ if __name__ == "__main__":
     world = esper.ParallelWorld()
     create_entities(world, 5)
 
-    report_proc = ReportProcessor()
+    movement_proc = MovementProcessor()
     gravity_proc = GravityProcessor()
-    relay_proc = RelayProcessor()
-    world.add_processor(report_proc)
+
+    world.add_processor(movement_proc)
     world.add_processor(gravity_proc)
-    world.add_processor(relay_proc)
 
-    # Give the processes time to spawn:
-    time.sleep(1)
-
-    for i in range(500):
+    for _ in range(5):
         world.process()
-        time.sleep(0.01)
-        if i == 250:
-            world.remove_component(entity=1, component_type=Position)
-            world.remove_component(entity=2, component_type=Position)
-            world.remove_component(entity=3, component_type=Position)
-            world.remove_component(entity=4, component_type=Position)
-            world.remove_component(entity=5, component_type=Position)
-            world.remove_processor(GravityProcessor)
+
+    manager = multiprocessing.Manager()
+
+    shared_dict = manager.dict()
+    shared_dict["key"] = manager.list()
+
+    shared_dict["key"].append(1)
+    print(shared_dict["key"])
+
+    shared_dict["key"][0] += 1
+    print(shared_dict["key"])
+
+    shared_dict["key2"] = manager.dict()
+
+    shared_dict["key2"]["internal_dict"] = 1
+    print(shared_dict["key2"])
+
+    shared_dict["key2"]["internal_dict"] += 1
+    print(shared_dict["key2"])
+
+    time.sleep(5)
