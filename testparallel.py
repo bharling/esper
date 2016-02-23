@@ -1,7 +1,6 @@
 import esper
 import random
 import time
-import multiprocessing
 
 
 #################################
@@ -28,8 +27,8 @@ class MovementProcessor(esper.Processor):
 
     def process(self):
         for ent, (vel, pos) in self.world.get_components(Velocity, Position):
-            vel.y += 1
-            print("Local", vel.y)
+            returned_vel = vel
+            print("ParallelProcessed values:", returned_vel.x, returned_vel.y)
 
 
 class GravityProcessor(esper.ParallelProcessor):
@@ -37,9 +36,17 @@ class GravityProcessor(esper.ParallelProcessor):
         super().__init__()
 
     def process(self):
-        for ent, vel in self.world.get_component(Velocity):
+        for ent, (vel, pos) in self.world.get_components(Velocity, Position):
             vel.y += 1
-            print("Multicore", vel.y)
+
+
+class RelayProcessor(esper.ParallelProcessor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        for ent, vel in self.world.get_component(Velocity):
+            vel.x += 1
 
 
 ###############
@@ -58,30 +65,12 @@ if __name__ == "__main__":
 
     movement_proc = MovementProcessor()
     gravity_proc = GravityProcessor()
-
+    relay_proc = RelayProcessor()
     world.add_processor(movement_proc)
     world.add_processor(gravity_proc)
+    world.add_processor(relay_proc)
 
     for _ in range(5):
         world.process()
-
-    manager = multiprocessing.Manager()
-
-    shared_dict = manager.dict()
-    shared_dict["key"] = manager.list()
-
-    shared_dict["key"].append(1)
-    print(shared_dict["key"])
-
-    shared_dict["key"][0] += 1
-    print(shared_dict["key"])
-
-    shared_dict["key2"] = manager.dict()
-
-    shared_dict["key2"]["internal_dict"] = 1
-    print(shared_dict["key2"])
-
-    shared_dict["key2"]["internal_dict"] += 1
-    print(shared_dict["key2"])
 
     time.sleep(5)

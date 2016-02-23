@@ -225,11 +225,9 @@ class ParallelWorld(World):
         self._entities = {}
 
     def add_processor(self, processor_instance, priority=0):
-        assert issubclass(processor_instance.__class__,
-                          (esper.Processor, esper.ParallelProcessor))
+        assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
         processor_instance.priority = priority
         processor_instance.world = self
-        processor_instance.ents = self._entities
         if issubclass(processor_instance.__class__, esper.ParallelProcessor):
             processor_instance.daemon = True
             processor_instance.start()
@@ -271,16 +269,6 @@ class ParallelWorld(World):
                 del self._components[component_type]
 
         del self._entities[entity]
-    """
-    def get_component(self, component_type):
-
-        entity_db = self._entities
-
-        for entity in self._components.get(component_type, []):
-            proxy_ent = entity_db[entity]
-            yield entity, proxy_ent[component_type]
-            entity_db[entity] = proxy_ent
-    """
 
     def get_components(self, *component_types):
         entity_db = self._entities
@@ -290,14 +278,8 @@ class ParallelWorld(World):
             entity_set = set.intersection(*[set(comp_db[ct]) for ct in component_types])
             for entity in entity_set:
                 yield entity, [entity_db[entity][ct] for ct in component_types]
-                entity_db.update()
-                comp_db.update()
         except KeyError:
             pass
-
-    def process(self, *args):
-        for processor in self._processors:
-            processor.process(*args)
 
 
 ####################################################
