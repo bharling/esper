@@ -73,13 +73,15 @@ if __name__ == "__main__":
     shared_dict["key"].append(1)
     print(shared_dict["key"])
 
-    sdl = shared_dict["key"]
-    sdl.append(1)
-    shared_dict["key"] = sdl
+    shared_dict["key"][0] += 1
     print(shared_dict["key"])
 
-    sdl = shared_dict["key"]
-    sdl[0] += 1
-    shared_dict["key"] = sdl
-    print(shared_dict["key"])
+    shared_dict["key2"] = manager.dict()
 
+    shared_dict["key2"]["internal_dict"] = 1
+    print(shared_dict["key2"])
+
+    shared_dict["key2"]["internal_dict"] += 1
+    print(shared_dict["key2"])
+
+    time.sleep(5)

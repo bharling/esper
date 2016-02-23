@@ -1,7 +1,8 @@
 import esper
 
 from functools import lru_cache
-from multiprocessing import Manager
+import multiprocessing
+import multiprocessing.managers as mpman
 
 
 class World:
@@ -160,89 +161,6 @@ class World:
             processor.process(*args)
 
 
-class ParallelWorld(World):
-    def __init__(self):
-        super().__init__()
-        self._manager = Manager()
-        self._components = {}
-        self._entities = {}
-
-    def add_processor(self, processor_instance, priority=0):
-        """Add a Processor instance to the world. """
-        assert issubclass(processor_instance.__class__,
-                          (esper.Processor, esper.ParallelProcessor))
-        processor_instance.priority = priority
-        processor_instance.world = self
-        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
-            processor_instance.daemon = True
-            processor_instance.start()
-        self._processors.append(processor_instance)
-        self._processors.sort(key=lambda processor: -processor.priority)
-
-    def remove_processor(self, processor_type):
-        """Remove a Processor from the world, by type. """
-        for processor in self._processors:
-            if type(processor) == processor_type:
-                processor.world = None
-                if issubclass(processor.__class__, esper.ParallelProcessor):
-                    processor.join()
-                    processor.terminate()
-                self._processors.remove(processor)
-
-    def add_component(self, entity, component_instance):
-        """Add a new Component instance to an Entity. """
-        # TODO: remove the *_proxy hacks when bug is fixed
-        component_type = type(component_instance)
-
-        if component_type not in self._components:
-            self._components[component_type] = self._manager.list()
-
-        comp_proxy = self._components[component_type]
-        comp_proxy.append(entity)
-        self._components[component_type] = comp_proxy
-
-        if entity not in self._entities:
-            self._entities[entity] = self._manager.dict()
-
-        ent_proxy = self._entities[entity]
-        ent_proxy[component_type] = component_instance
-        self._entities[entity] = ent_proxy
-
-    def delete_entity(self, entity):
-        """Delete an Entity from the World.
-
-        Delete an Entity from the World. This will also delete any Component
-        instances that are assigned to the Entity.
-
-        Raises a KeyError if the given entity does not exist in the database.
-        :param entity: The Entity ID you wish to delete.
-        """
-        for component_type in self._entities[entity]:
-            self._components[component_type].remove(entity)
-
-            if not self._components[component_type]:
-                del self._components[component_type]
-
-        del self._entities[entity]
-
-    def get_components(self, *component_types):
-        """Get an iterator for Entity and multiple Component sets. """
-        entity_db = self._entities
-        comp_db = self._components
-
-        try:
-            entity_set = set.intersection(*[set(comp_db[ct]) for ct in component_types])
-            for entity in entity_set:
-                yield entity, [entity_db[entity][ct] for ct in component_types]
-        except KeyError:
-            pass
-
-    def process(self, *args):
-        """Process all Systems, in order of their priority."""
-        for processor in self._processors:
-            processor.process(*args)
-
-
 class CachedWorld(World):
     def __init__(self, cache_size=128):
         """A sub-class of World using an LRU cache for Entity lookups."""
@@ -297,3 +215,104 @@ class CachedWorld(World):
                 yield entity, [entity_db[entity][ct] for ct in component_types]
         except KeyError:
             pass
+
+
+class ParallelWorld(World):
+    def __init__(self):
+        super().__init__()
+        self._manager = multiprocessing.Manager()
+        self._components = {}
+        self._entities = {}
+
+    def add_processor(self, processor_instance, priority=0):
+        assert issubclass(processor_instance.__class__,
+                          (esper.Processor, esper.ParallelProcessor))
+        processor_instance.priority = priority
+        processor_instance.world = self
+        processor_instance.ents = self._entities
+        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
+            processor_instance.daemon = True
+            processor_instance.start()
+        self._processors.append(processor_instance)
+        self._processors.sort(key=lambda processor: -processor.priority)
+
+    def remove_processor(self, processor_type):
+        for processor in self._processors:
+            if type(processor) == processor_type:
+                processor.world = None
+                if issubclass(processor.__class__, esper.ParallelProcessor):
+                    processor.join()
+                    processor.terminate()
+                self._processors.remove(processor)
+
+    def add_component(self, entity, component_instance):
+        # TODO: remove the *_proxy hacks when bug is fixed
+        component_type = type(component_instance)
+
+        if component_type not in self._components:
+            self._components[component_type] = list()
+
+        comp_proxy = self._components[component_type]
+        comp_proxy.append(entity)
+        self._components[component_type] = comp_proxy
+
+        if entity not in self._entities:
+            self._entities[entity] = dict()
+
+        ent_proxy = self._entities[entity]
+        ent_proxy[component_type] = component_instance
+        self._entities[entity] = ent_proxy
+
+    def delete_entity(self, entity):
+        for component_type in self._entities[entity]:
+            self._components[component_type].remove(entity)
+
+            if not self._components[component_type]:
+                del self._components[component_type]
+
+        del self._entities[entity]
+    """
+    def get_component(self, component_type):
+
+        entity_db = self._entities
+
+        for entity in self._components.get(component_type, []):
+            proxy_ent = entity_db[entity]
+            yield entity, proxy_ent[component_type]
+            entity_db[entity] = proxy_ent
+    """
+
+    def get_components(self, *component_types):
+        entity_db = self._entities
+        comp_db = self._components
+
+        try:
+            entity_set = set.intersection(*[set(comp_db[ct]) for ct in component_types])
+            for entity in entity_set:
+                yield entity, [entity_db[entity][ct] for ct in component_types]
+                entity_db.update()
+                comp_db.update()
+        except KeyError:
+            pass
+
+    def process(self, *args):
+        for processor in self._processors:
+            processor.process(*args)
+
+
+####################################################
+# MonkeyPatch to work around proxy return limitation
+####################################################
+def RebuildProxyNoReferent(func, token, serializer, kwds):
+    """Function used for unpickling proxy objects.
+
+    The Proxy object is always returned.
+    """
+    incref = (
+        kwds.pop('incref', True) and
+        not getattr(multiprocessing.process.current_process(), '_inheriting', False)
+    )
+    return func(token, serializer, incref=incref, **kwds)
+
+
+mpman.RebuildProxy = RebuildProxyNoReferent
