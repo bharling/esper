@@ -2,7 +2,7 @@ import esper
 
 from functools import lru_cache
 import multiprocessing
-import multiprocessing.managers as mpman
+import multiprocessing.managers as mp_managers
 
 
 class World:
@@ -297,4 +297,4 @@ def RebuildProxyNoReferent(func, token, serializer, kwds):
     return func(token, serializer, incref=incref, **kwds)
 
 
-mpman.RebuildProxy = RebuildProxyNoReferent
+mp_managers.RebuildProxy = RebuildProxyNoReferent
