@@ -221,8 +221,7 @@ class ParallelWorld(World):
         self._entities = {}
 
     def add_processor(self, processor_instance, priority=0):
-        assert issubclass(processor_instance.__class__,
-                          (esper.Processor, esper.ParallelProcessor))
+        assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
         processor_instance.priority = priority
         processor_instance.world = self
         if issubclass(processor_instance.__class__, esper.ParallelProcessor):
@@ -277,10 +276,6 @@ class ParallelWorld(World):
                 yield entity, [entity_db[entity][ct] for ct in component_types]
         except KeyError:
             pass
-
-    def process(self, *args):
-        for processor in self._processors:
-            processor.process(*args)
 
 
 class CachedWorld(World):
