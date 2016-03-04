@@ -2,7 +2,6 @@ import esper
 
 from functools import lru_cache
 import multiprocessing
-import multiprocessing.managers as mp_managers
 
 
 class World:
@@ -220,9 +219,9 @@ class CachedWorld(World):
 class ParallelWorld(World):
     def __init__(self):
         super().__init__()
-        self._manager = multiprocessing.Manager()
-        self._components = {}
-        self._entities = {}
+        multiprocessing.set_start_method("spawn")
+        self._components = dict()
+        self._entities = dict()
 
     def add_processor(self, processor_instance, priority=0):
         assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
@@ -242,59 +241,3 @@ class ParallelWorld(World):
                     processor.join()
                     processor.terminate()
                 self._processors.remove(processor)
-
-    def add_component(self, entity, component_instance):
-        # TODO: remove the *_proxy hacks when bug is fixed
-        component_type = type(component_instance)
-
-        if component_type not in self._components:
-            self._components[component_type] = list()
-
-        comp_proxy = self._components[component_type]
-        comp_proxy.append(entity)
-        self._components[component_type] = comp_proxy
-
-        if entity not in self._entities:
-            self._entities[entity] = dict()
-
-        ent_proxy = self._entities[entity]
-        ent_proxy[component_type] = component_instance
-        self._entities[entity] = ent_proxy
-
-    def delete_entity(self, entity):
-        for component_type in self._entities[entity]:
-            self._components[component_type].remove(entity)
-
-            if not self._components[component_type]:
-                del self._components[component_type]
-
-        del self._entities[entity]
-
-    def get_components(self, *component_types):
-        entity_db = self._entities
-        comp_db = self._components
-
-        try:
-            entity_set = set.intersection(*[set(comp_db[ct]) for ct in component_types])
-            for entity in entity_set:
-                yield entity, [entity_db[entity][ct] for ct in component_types]
-        except KeyError:
-            pass
-
-
-####################################################
-# MonkeyPatch to work around proxy return limitation
-####################################################
-def RebuildProxyNoReferent(func, token, serializer, kwds):
-    """Function used for unpickling proxy objects.
-
-    The Proxy object is always returned.
-    """
-    incref = (
-        kwds.pop('incref', True) and
-        not getattr(multiprocessing.process.current_process(), '_inheriting', False)
-    )
-    return func(token, serializer, incref=incref, **kwds)
-
-
-mp_managers.RebuildProxy = RebuildProxyNoReferent
