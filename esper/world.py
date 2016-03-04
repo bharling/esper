@@ -2,6 +2,7 @@ import esper
 
 from functools import lru_cache
 import multiprocessing
+import concurrent.futures
 
 
 class World:
@@ -241,3 +242,7 @@ class ParallelWorld(World):
                     processor.join()
                     processor.terminate()
                 self._processors.remove(processor)
+
+    def process(self, *args):
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            [executor.submit(processor.process) for processor in self._processors]
