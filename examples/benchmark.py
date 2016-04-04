@@ -5,6 +5,7 @@ import gc
 import pickle
 import sys
 import time
+import timeit
 
 import esper
 
@@ -154,7 +155,12 @@ for amount in range(1000, 5000, 100):
 ########################################
 # Save the results to disk for plotting:
 ########################################
-file_name = time.strftime('results-%Y%m%dT%H%M%S.pickle')
-print("Saving benchmark results to '{}'...".format(file_name))
-with open(file_name, 'wb') as picklefile:
-    pickle.dump(results, picklefile)
+if len(sys.argv) > 1:
+    if sys.argv[1] == "--save":
+        file_name = time.strftime('results-%Y%m%dT%H%M%S.pickle')
+        print("\nSaving benchmark results to '{}'...".format(file_name))
+        print("Display these results by running  plot-results.py {}".format(file_name))
+        with open(file_name, 'wb') as picklefile:
+            pickle.dump(results, picklefile)
+    else:
+        print("You can save these results to disk with the --save argument.")
