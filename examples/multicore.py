@@ -28,7 +28,7 @@ class MovementProcessor(esper.Processor):
     def process(self):
         for ent, (vel, pos) in self.world.get_components(Velocity, Position):
             returned_vel = vel
-            print("ParallelProcessed values:", returned_vel.x, returned_vel.y)
+            print("Returned values:", returned_vel.x, returned_vel.y)
 
 
 class GravityProcessor(esper.ParallelProcessor):
@@ -36,6 +36,7 @@ class GravityProcessor(esper.ParallelProcessor):
         super().__init__()
 
     def process(self):
+        print("Processing", self.name)
         for ent, (vel, pos) in self.world.get_components(Velocity, Position):
             vel.y += 1
 
@@ -45,6 +46,7 @@ class RelayProcessor(esper.ParallelProcessor):
         super().__init__()
 
     def process(self):
+        print("Processing", self.name)
         for ent, vel in self.world.get_component(Velocity):
             vel.x += 1
 
@@ -70,7 +72,9 @@ if __name__ == "__main__":
     world.add_processor(gravity_proc)
     world.add_processor(relay_proc)
 
+    # Give the processes time to spawn:
+    time.sleep(1)
+
     for _ in range(5):
         world.process()
-
-    time.sleep(5)
+        time.sleep(0.5)
