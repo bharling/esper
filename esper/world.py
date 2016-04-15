@@ -198,7 +198,7 @@ class CachedWorld(World):
 
     def remove_component(self, entity, component_type):
         """Remove a Component instance from an Entity, by type."""
-        super().delete_component(entity, component_type)
+        super().remove_component(entity, component_type)
         self.cache_clear()
 
     @lru_cache()
@@ -221,28 +221,39 @@ class ParallelWorld(World):
     def __init__(self):
         super().__init__()
         multiprocessing.set_start_method("spawn")
-        self._components = dict()
-        self._entities = dict()
+        self._components = {}
+        self._entities = {}
+        self._local_processors = []
+        self._spawn_processors = []
 
     def add_processor(self, processor_instance, priority=0):
         assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
+
         processor_instance.priority = priority
         processor_instance.world = self
+
         if issubclass(processor_instance.__class__, esper.ParallelProcessor):
             processor_instance.daemon = True
             processor_instance.start()
-        self._processors.append(processor_instance)
-        self._processors.sort(key=lambda processor: -processor.priority)
+            self._spawn_processors.append(processor_instance)
+        else:
+            self._local_processors.append(processor_instance)
+            self._local_processors.sort(key=lambda processor: -processor.priority)
 
     def remove_processor(self, processor_type):
-        for processor in self._processors:
+        # TODO: see if this can be simplified
+        for processor in self._local_processors:
             if type(processor) == processor_type:
                 processor.world = None
-                if issubclass(processor.__class__, esper.ParallelProcessor):
-                    processor.join()
-                    processor.terminate()
-                self._processors.remove(processor)
+                self._local_processors.remove(processor)
+        for processor in self._spawn_processors:
+            if type(processor) == processor_type:
+                processor.world = None
+                self._spawn_processors.remove(processor)
+                # TODO: kill processor
 
     def process(self, *args):
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            [executor.submit(processor.process) for processor in self._processors]
+        for processor in self._spawn_processors:
+            processor._process_now.set()
+        for processor in self._local_processors:
+            processor.process()
