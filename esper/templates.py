@@ -10,21 +10,21 @@ class Processor:
 
 
 class ParallelProcessor(multiprocessing.Process):
-    def __init__(self, daemon=False):
+    def __init__(self):
         super().__init__()
         self.world = None
-        self.daemon = daemon
-        self._kill_switch = multiprocessing.Event()
-        self._process_now = multiprocessing.Event()
+        self.kill_switch = multiprocessing.Event()
+        self.process_switch = multiprocessing.Event()
 
     def process(self, *args):
         raise NotImplementedError
 
     def run(self):
         print("Starting {},  pid: {}".format(self.name, self.pid))
-        while not self._kill_switch.is_set():
-            self._process_now.wait()
+        while not self.kill_switch.is_set():
+            # FIXME: skip processing if still busy.
+            self.process_switch.wait()
             self.process()
-            self._process_now.clear()
+            self.process_switch.clear()
 
         print("{} process ended".format(self.name))
