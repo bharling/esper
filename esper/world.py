@@ -221,6 +221,7 @@ class ParallelWorld(World):
     def __init__(self):
         super().__init__()
         multiprocessing.set_start_method("spawn")
+        # FIXME: find practical way to syncronize the databases. multiprocessing.Manager?
         self._components = {}
         self._entities = {}
         self._local_processors = []
@@ -249,11 +250,13 @@ class ParallelWorld(World):
         for processor in self._spawn_processors:
             if type(processor) == processor_type:
                 processor.world = None
+                processor.kill_switch.set()
+                processor.terminate()
+                processor.join()
                 self._spawn_processors.remove(processor)
-                # TODO: kill processor
 
     def process(self, *args):
         for processor in self._spawn_processors:
-            processor._process_now.set()
+            processor.process_switch.set()
         for processor in self._local_processors:
             processor.process()
