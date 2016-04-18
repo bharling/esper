@@ -5,18 +5,18 @@ import pytest
 
 @pytest.fixture
 def world():
-    return esper.World()
+    return esper.CachedWorld()
 
 
 @pytest.fixture
 def populated_world():
-    pop_world = esper.World()
+    pop_world = esper.CachedWorld()
     create_entities(pop_world, 2000)
     return pop_world
 
 
 def test_world_instantiation(world):
-    assert type(world) == esper.World
+    assert type(world) == esper.CachedWorld
     assert type(world._next_entity_id) == int
     assert type(world._entities) == dict
     assert type(world._components) == dict

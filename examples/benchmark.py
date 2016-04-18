@@ -5,9 +5,29 @@ import gc
 import pickle
 import sys
 import time
-import timeit
+import optparse
 
 import esper
+
+######################
+# Commandline options:
+######################
+parser = optparse.OptionParser()
+parser.add_option("-c", "--cached", dest="cached", action="store_true", default=False,
+                  help="Benchmark esper.CachedWorld instead of esper.World.")
+parser.add_option("-s", "--save", dest="save", action="store_true", default=False,
+                  help="Save benchmark to disk to display later with plot-results.py")
+parser.add_option("-p", "--plot", dest="plot", action="store_true", default=False,
+                  help="Display benchmark. Requires matplotlib module.")
+parser.add_option("-e", "--entities", dest="entities", action="store", default=5000, type="int",
+                  help="Change the maximum number of Entities to benchmark. Default is 5000.")
+
+(options, arguments) = parser.parse_args()
+
+MAX_ENTITIES = options.entities
+if MAX_ENTITIES <= 500:
+    print("The number of entities must be greater than 500.")
+    sys.exit(1)
 
 
 ##########################
@@ -26,7 +46,11 @@ def timing(f):
 ##############################
 #  Instantiate the game world:
 ##############################
-world = esper.CachedWorld() if '--use-cache' in sys.argv[1:] else esper.World()
+if options.cached:
+    print("Benchmarking CachedWorld...\n")
+    world = esper.CachedWorld()
+else:
+    world = esper.World()
 
 
 #################################
@@ -115,7 +139,7 @@ def three_comp_query():
 results = {1: {}, 2: {}, 3: {}}
 result_times = []
 
-for amount in range(1000, 5000, 100):
+for amount in range(500, MAX_ENTITIES, 100):
     create_entities(amount)
     for _ in range(20):
         single_comp_query()
@@ -127,7 +151,7 @@ for amount in range(1000, 5000, 100):
     world.clear_database()
     gc.collect()
 
-for amount in range(1000, 5000, 100):
+for amount in range(500, MAX_ENTITIES, 100):
     create_entities(amount)
     for _ in range(20):
         two_comp_query()
@@ -139,7 +163,7 @@ for amount in range(1000, 5000, 100):
     world.clear_database()
     gc.collect()
 
-for amount in range(1000, 5000, 100):
+for amount in range(500, MAX_ENTITIES, 100):
     create_entities(amount)
     for _ in range(20):
         three_comp_query()
@@ -152,15 +176,33 @@ for amount in range(1000, 5000, 100):
     gc.collect()
 
 
-########################################
-# Save the results to disk for plotting:
-########################################
-if len(sys.argv) > 1:
-    if sys.argv[1] == "--save":
-        file_name = time.strftime('results-%Y%m%dT%H%M%S.pickle')
-        print("\nSaving benchmark results to '{}'...".format(file_name))
-        print("Display these results by running  plot-results.py {}".format(file_name))
-        with open(file_name, 'wb') as picklefile:
-            pickle.dump(results, picklefile)
-    else:
-        print("You can save these results to disk with the --save argument.")
+#############################################
+# Save the results to disk, or plot directly:
+#############################################
+
+if not options.save and not options.plot:
+    print("\nRun 'benchmark.py --help' for details on saving or plotting this benchmark.")
+
+if options.save:
+    file_name = time.strftime('results-%Y%m%dT%H%M%S.pickle')
+    print("\nSaving benchmark results to '{}'...".format(file_name))
+    with open(file_name, 'wb') as picklefile:
+        pickle.dump(results, picklefile)
+
+if options.plot:
+    try:
+        from matplotlib import pyplot as plt
+    except ImportError:
+        print("\nThe matplotlib module is required for plotting results.")
+        sys.exit(1)
+
+    lines = []
+    for num, result in results.items():
+        x, y = zip(*sorted(result.items()))
+        label = '%i Component%s' % (num, '' if num == 1 else 's')
+        lines.extend(plt.plot(x, y, label=label))
+
+    plt.ylabel("Time (ms)")
+    plt.xlabel("# Entities")
+    plt.legend(handles=lines, bbox_to_anchor=(0.5, 1))
+    plt.show()

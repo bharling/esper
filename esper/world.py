@@ -149,8 +149,7 @@ class World:
         comp_db = self._components
 
         try:
-            entity_set = set.intersection(*[comp_db[ct] for ct in component_types])
-            for entity in entity_set:
+            for entity in set.intersection(*[comp_db[ct] for ct in component_types]):
                 yield entity, [entity_db[entity][ct] for ct in component_types]
         except KeyError:
             pass

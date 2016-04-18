@@ -1,17 +1,30 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import gc
-import pickle
 import sys
 import time
+import optparse
+import esper
+
 try:
     from matplotlib import pyplot
-except:
+except ImportError:
     print("The matplotlib module is currently required for this benchmark.")
     raise Exception
 
-import esper
+######################
+# Commandline options:
+######################
+parser = optparse.OptionParser()
+parser.add_option("-e", "--entities", dest="entities", action="store", default=5000, type="int",
+                  help="Change the maximum number of Entities to benchmark. Default is 5000.")
+
+(options, arguments) = parser.parse_args()
+
+MAX_ENTITIES = options.entities
+if MAX_ENTITIES <= 50:
+    print("The number of entities must be greater than 500.")
+    sys.exit(1)
 
 
 ##########################
@@ -112,34 +125,39 @@ def create_entities(world, number):
 current_run = []
 standard_results = []
 cached_results = []
+print("\nFor the first half of each pass, Entities are static.")
+print("For the second half, Entities are created/deleted each frame.\n")
 
 
 @timing
 def query_entities(world):
     for _, (_, _) in world.get_components(Position, Velocity):
         pass
+    for _, (_, _, _) in world.get_components(Health, Damageable, Position):
+        pass
+
 
 for current_pass in range(5):
     standard_world.clear_database()
-    create_entities(standard_world, 5000)
+    create_entities(standard_world, MAX_ENTITIES)
     print("Standard World pass {}...".format(current_pass + 1))
     for amount in range(1, 500):
         query_entities(standard_world)
         if amount > 250:
             standard_world.delete_entity(amount)
-            standard_world.create_entity()
+            create_entities(standard_world, 1)
     standard_results.append(current_run)
     current_run = []
 
 for current_pass in range(5):
     cached_world.clear_database()
-    create_entities(cached_world, 5000)
+    create_entities(cached_world, MAX_ENTITIES)
     print("Cached World pass {}...".format(current_pass + 1))
     for amount in range(1, 500):
         query_entities(cached_world)
         if amount > 250:
             cached_world.delete_entity(amount)
-            cached_world.create_entity()
+            create_entities(standard_world, 1)
     cached_results.append(current_run)
     current_run = []
 
@@ -147,8 +165,7 @@ standard_averaged_results = [sorted(e)[0] for e in zip(*standard_results)]
 cached_averaged_results = [sorted(e)[0] for e in zip(*cached_results)]
 
 pyplot.ylabel("Query time (ms)")
-pyplot.xlabel("Query number")
-pyplot.ylim(0, 6)
+pyplot.xlabel("Query of {} entities".format(MAX_ENTITIES))
 pyplot.plot(standard_averaged_results, label="Standard")
 pyplot.plot(cached_averaged_results, label="Cached")
 pyplot.legend(bbox_to_anchor=(0.5, 1))
