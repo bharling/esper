@@ -15,6 +15,7 @@ class ParallelProcessor(multiprocessing.Process):
         self.world = None
         self.kill_switch = multiprocessing.Event()
         self.process_switch = multiprocessing.Event()
+        self.queue = multiprocessing.Queue()
 
     def process(self, *args):
         raise NotImplementedError
@@ -24,7 +25,9 @@ class ParallelProcessor(multiprocessing.Process):
         while not self.kill_switch.is_set():
             # FIXME: skip processing if still busy.
             self.process_switch.wait()
+            self.world._entities, self.world._components = self.queue.get()
             self.process()
+            self.queue.put((self.world._entities, self.world._components))
             self.process_switch.clear()
 
         print("{} process ended".format(self.name))
