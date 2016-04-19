@@ -2,6 +2,7 @@ import esper
 
 from functools import lru_cache
 import multiprocessing
+import time
 
 
 class World:
@@ -219,7 +220,6 @@ class ParallelWorld(World):
     def __init__(self):
         super().__init__()
         multiprocessing.set_start_method("spawn")
-        # FIXME: find practical way to syncronize the databases. multiprocessing.Manager?
         self._components = {}
         self._entities = {}
         self._local_processors = []
@@ -255,6 +255,12 @@ class ParallelWorld(World):
 
     def process(self, *args):
         for processor in self._spawn_processors:
+            # FIXME: syncronize these items in a sane manner.
+            processor.queue.put((self._entities, self._components))
             processor.process_switch.set()
+
         for processor in self._local_processors:
             processor.process()
+
+        for processor in self._spawn_processors:
+            self._entities, self._components = processor.queue.get()
