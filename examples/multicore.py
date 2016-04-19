@@ -7,7 +7,7 @@ import multiprocessing
 #################################
 # Define some generic components:
 #################################
-class Velocity:
+class SharedVelocity:
     def __init__(self, x=0.0, y=0.0):
         self._x = multiprocessing.Value('f', x)
         self._y = multiprocessing.Value('f', y)
@@ -27,6 +27,12 @@ class Velocity:
     @y.setter
     def y(self, value):
         self._y.value = value
+
+
+class Velocity:
+    def __init__(self, x=0.0, y=0.0):
+        self.x = x
+        self.y = y
 
 
 class Position:
@@ -94,7 +100,7 @@ if __name__ == "__main__":
 
     for i in range(500):
         world.process()
-        time.sleep(0.02)
+        time.sleep(0.01)
         if i == 250:
             world.remove_component(entity=1, component_type=Position)
             world.remove_component(entity=2, component_type=Position)
