@@ -2,7 +2,6 @@ import esper
 
 from functools import lru_cache
 import multiprocessing
-import concurrent.futures
 
 
 class World:

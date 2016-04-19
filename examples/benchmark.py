@@ -15,6 +15,8 @@ import esper
 parser = optparse.OptionParser()
 parser.add_option("-c", "--cached", dest="cached", action="store_true", default=False,
                   help="Benchmark esper.CachedWorld instead of esper.World.")
+parser.add_option("-m", "--multicore", dest="multicore", action="store_true", default=False,
+                  help="Benchmark esper.ParallelWorld instead of esper.World.")
 parser.add_option("-s", "--save", dest="save", action="store_true", default=False,
                   help="Save benchmark to disk to display later with plot-results.py")
 parser.add_option("-p", "--plot", dest="plot", action="store_true", default=False,
@@ -49,6 +51,9 @@ def timing(f):
 if options.cached:
     print("Benchmarking CachedWorld...\n")
     world = esper.CachedWorld()
+elif options.multicore:
+    print("Benchmarking ParallelWorld...\n")
+    world = esper.ParallelWorld()
 else:
     world = esper.World()
 
