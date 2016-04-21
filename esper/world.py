@@ -2,7 +2,6 @@ import esper
 
 from functools import lru_cache
 import multiprocessing
-import time
 
 
 class World:
@@ -219,9 +218,10 @@ class CachedWorld(World):
 class ParallelWorld(World):
     def __init__(self):
         super().__init__()
-        multiprocessing.set_start_method("spawn")
-        self._components = {}
-        self._entities = {}
+        # multiprocessing.set_start_method("spawn")
+        self._manager = multiprocessing.Manager()
+        self._components = self._manager.dict()
+        self._entities = self._manager.dict()
         self._local_processors = []
         self._spawn_processors = []
 
@@ -253,14 +253,37 @@ class ParallelWorld(World):
                 processor.join()
                 self._spawn_processors.remove(processor)
 
+    def add_component(self, entity, component_instance):
+        component_type = type(component_instance)
+
+        if component_type not in self._components:
+            self._components[component_type] = set()
+
+        s = self._components[component_type]
+        s.add(entity)
+        self._components[component_type] = s
+
+        if entity not in self._entities:
+            self._entities[entity] = {}
+
+        e = self._entities[entity]
+        e[component_type] = component_instance
+        self._entities[entity] = e
+
+    def get_component(self, component_type):
+        """Get an iterator for Entity, Component pairs.
+
+        :param component_type: The Component type to retrieve.
+        :return: An iterator for (Entity, Component) tuples.
+        """
+        if component_type in self._components.keys():
+            entity_db = self._entities
+            for entity in self._components.get(component_type, []):
+                yield entity, entity_db[entity][component_type]
+
     def process(self, *args):
         for processor in self._spawn_processors:
-            # FIXME: syncronize these items in a sane manner.
-            processor.queue.put((self._entities, self._components))
             processor.process_switch.set()
 
         for processor in self._local_processors:
             processor.process()
-
-        for processor in self._spawn_processors:
-            self._entities, self._components = processor.queue.get()
