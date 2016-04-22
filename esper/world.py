@@ -218,10 +218,9 @@ class CachedWorld(World):
 class ParallelWorld(World):
     def __init__(self):
         super().__init__()
-        # multiprocessing.set_start_method("spawn")
-        self._manager = multiprocessing.Manager()
-        self._components = self._manager.dict()
-        self._entities = self._manager.dict()
+        multiprocessing.set_start_method("spawn")
+        self._components = {}
+        self._entities = {}
         self._local_processors = []
         self._spawn_processors = []
 
@@ -235,6 +234,7 @@ class ParallelWorld(World):
             processor_instance.daemon = True
             processor_instance.start()
             self._spawn_processors.append(processor_instance)
+            self._spawn_processors.sort(key=lambda processor: -processor.priority)
         else:
             self._local_processors.append(processor_instance)
             self._local_processors.sort(key=lambda processor: -processor.priority)
@@ -253,33 +253,19 @@ class ParallelWorld(World):
                 processor.join()
                 self._spawn_processors.remove(processor)
 
-    def add_component(self, entity, component_instance):
-        component_type = type(component_instance)
+    def remove_component(self, entity, component_type):
+        """Remove a Component instance from an Entity, by type."""
+        self._components[component_type].discard(entity)
 
-        if component_type not in self._components:
-            self._components[component_type] = set()
+        if not self._components[component_type]:
+            del self._components[component_type]
 
-        s = self._components[component_type]
-        s.add(entity)
-        self._components[component_type] = s
+        del self._entities[entity][component_type]
 
-        if entity not in self._entities:
-            self._entities[entity] = {}
+        if not self._entities[entity]:
+            del self._entities[entity]
 
-        e = self._entities[entity]
-        e[component_type] = component_instance
-        self._entities[entity] = e
-
-    def get_component(self, component_type):
-        """Get an iterator for Entity, Component pairs.
-
-        :param component_type: The Component type to retrieve.
-        :return: An iterator for (Entity, Component) tuples.
-        """
-        if component_type in self._components.keys():
-            entity_db = self._entities
-            for entity in self._components.get(component_type, []):
-                yield entity, entity_db[entity][component_type]
+        return entity
 
     def process(self, *args):
         for processor in self._spawn_processors:
