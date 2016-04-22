@@ -31,8 +31,30 @@ import multiprocessing
 
 class Velocity:
     def __init__(self, x=0.0, y=0.0):
-        self.x = x
-        self.y = y
+        self._x = multiprocessing.Value('f', x)
+        self._y = multiprocessing.Value('f', y)
+
+    @property
+    def x(self):
+        return self._x.value
+
+    @x.setter
+    def x(self, value):
+        self._x.value = value
+
+    @property
+    def y(self):
+        return self._y.value
+
+    @y.setter
+    def y(self, value):
+        self._y.value = value
+
+
+# class Velocity:
+#     def __init__(self, x=0.0, y=0.0):
+#         self.x = x
+#         self.y = y
 
 
 class Position:

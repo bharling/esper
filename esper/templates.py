@@ -15,6 +15,8 @@ class ParallelProcessor(multiprocessing.Process):
         self.world = None
         self.kill_switch = multiprocessing.Event()
         self.process_switch = multiprocessing.Event()
+        self.sync_switch = multiprocessing.Event()
+        self.queue = multiprocessing.SimpleQueue()
 
     def process(self, *args):
         raise NotImplementedError
@@ -26,5 +28,3 @@ class ParallelProcessor(multiprocessing.Process):
             self.process_switch.wait()
             self.process()
             self.process_switch.clear()
-
-        print("{} process ended".format(self.name))
