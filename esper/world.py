@@ -1,7 +1,6 @@
 import esper
 
 from functools import lru_cache
-import multiprocessing
 
 
 class World:
@@ -92,6 +91,11 @@ class World:
         otherwise False
         """
         return component_type in self._entities[entity]
+        #
+        # try:
+        #     return entity in self._components[component_type]
+        # except KeyError:
+        #     return False
 
     def add_component(self, entity, component_instance):
         """Add a new Component instance to an Entity.
@@ -223,88 +227,3 @@ class CachedWorld(World):
                 yield entity, [entity_db[entity][ct] for ct in component_types]
         except KeyError:
             pass
-
-
-class ParallelWorld(World):
-    def __init__(self):
-        super().__init__()
-        self._manager = multiprocessing.Manager()
-        self._components = self._manager.dict()
-        self._entities = self._manager.dict()
-        self._local_processors = []
-        self._spawn_processors = []
-
-    def add_processor(self, processor_instance, priority=0):
-        assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
-
-        processor_instance.priority = priority
-        processor_instance.world = self
-
-        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
-            processor_instance.daemon = True
-            processor_instance.start()
-            self._spawn_processors.append(processor_instance)
-            self._spawn_processors.sort(key=lambda processor: -processor.priority)
-        else:
-            self._local_processors.append(processor_instance)
-            self._local_processors.sort(key=lambda processor: -processor.priority)
-
-    def remove_processor(self, processor_type):
-        # TODO: see if this can be simplified
-        for processor in self._local_processors:
-            if type(processor) == processor_type:
-                processor.world = None
-                self._local_processors.remove(processor)
-        for processor in self._spawn_processors:
-            if type(processor) == processor_type:
-                processor.world = None
-                processor.kill_switch.set()
-                processor.terminate()
-                processor.join()
-                self._spawn_processors.remove(processor)
-
-    def add_component(self, entity, component_instance):
-        """Add a new Component instance to an Entity."""
-        component_name = component_instance.__class__.__name__
-
-        comp_db = self._components
-        entity_db = self._entities
-
-        if component_name not in comp_db:
-            comp_db[component_name] = set()
-
-        comp_db[component_name].add(entity)
-
-        if entity not in entity_db:
-            entity_db[entity] = {}
-
-        entity_db[entity][component_name] = component_instance
-
-        self._entities = entity_db
-        self._components = comp_db
-
-    def get_component(self, component_type):
-        """Get an iterator for Entity, Component pairs."""
-        entity_db = self._entities
-        for entity in self._components.get(component_type.__name__, []):
-            yield entity, entity_db[entity][component_type.__name__]
-        self._entities = entity_db
-
-    def get_components(self, *component_types):
-        """Get an iterator for Entity and multiple Component sets."""
-        entity_db = self._entities
-        comp_db = self._components
-        try:
-            for entity in set.intersection(*[comp_db[ct.__name__] for ct in component_types]):
-                yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
-        except KeyError:
-            pass
-        self._entities = entity_db
-        self._components = comp_db
-
-    def process(self, *args):
-        for processor in self._spawn_processors:
-            processor.process_switch.set()
-
-        for processor in self._local_processors:
-            processor.process()
