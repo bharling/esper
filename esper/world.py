@@ -324,13 +324,13 @@ mpman.RebuildProxy = RebuildProxyNoReferent
     def _get_entities(self, component_types):
         """Return set of Entities having all given Components."""
         comp_db = self._components
-        return set.intersection(*[comp_db[ct] for ct in component_types])
+        return set.intersection(*[comp_db[ct.__name__] for ct in component_types])
 
     def get_components(self, *component_types):
         """Get an iterator for Entity and multiple Component sets."""
         entity_db = self._entities
         try:
             for entity in self._get_entities(component_types):
-                yield entity, [entity_db[entity][ct] for ct in component_types]
+                yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
         except KeyError:
             pass
