@@ -63,11 +63,11 @@ class World:
         Raises a KeyError if the given entity does not exist in the database.
         :param entity: The Entity ID you wish to delete.
         """
-        for component_type in self._entities[entity]:
-            self._components[component_type].discard(entity)
+        for component_name in self._entities[entity]:
+            self._components[component_name].discard(entity)
 
-            if not self._components[component_type]:
-                del self._components[component_type]
+            if not self._components[component_name]:
+                del self._components[component_name]
 
         del self._entities[entity]
 
@@ -79,9 +79,19 @@ class World:
         :return: A Component instance, *if* it exists for the Entity.
         """
         try:
-            return self._entities[entity][component_type]
+            return self._entities[entity][component_type.__name__]
         except KeyError:
             pass
+
+    def has_component(self, entity, component_type):
+        """Check if a specific Entity has a Component of a certain type.
+
+        :param entity: The Entity you are querying.
+        :param component_type: The type of Component to check for.
+        :return: True if the Entity has a Component of this type,
+        otherwise False
+        """
+        return component_type.__name__ in self._entities[entity]
 
     def add_component(self, entity, component_instance):
         """Add a new Component instance to an Entity.
@@ -91,17 +101,17 @@ class World:
         :param entity: The Entity to associate the Component with.
         :param component_instance: A Component instance.
         """
-        component_type = type(component_instance)
+        component_name = component_instance.__class__.__name__
 
-        if component_type not in self._components:
-            self._components[component_type] = set()
+        if component_name not in self._components:
+            self._components[component_name] = set()
 
-        self._components[component_type].add(entity)
+        self._components[component_name].add(entity)
 
         if entity not in self._entities:
             self._entities[entity] = {}
 
-        self._entities[entity][component_type] = component_instance
+        self._entities[entity][component_name] = component_instance
 
     def remove_component(self, entity, component_type):
         """Remove a Component instance from an Entity, by type.
@@ -115,12 +125,12 @@ class World:
         :param entity: The Entity to remove the Component from.
         :param component_type: The type of the Component to remove.
         """
-        self._components[component_type].discard(entity)
+        self._components[component_type.__name__].discard(entity)
 
-        if not self._components[component_type]:
-            del self._components[component_type]
+        if not self._components[component_type.__name__]:
+            del self._components[component_type.__name__]
 
-        del self._entities[entity][component_type]
+        del self._entities[entity][component_type.__name__]
 
         if not self._entities[entity]:
             del self._entities[entity]
@@ -134,8 +144,8 @@ class World:
         :return: An iterator for (Entity, Component) tuples.
         """
         entity_db = self._entities
-        for entity in self._components.get(component_type, []):
-            yield entity, entity_db[entity][component_type]
+        for entity in self._components.get(component_type.__name__, []):
+            yield entity, entity_db[entity][component_type.__name__]
 
     def get_components(self, *component_types):
         """Get an iterator for Entity and multiple Component sets.
@@ -148,8 +158,8 @@ class World:
         comp_db = self._components
 
         try:
-            for entity in set.intersection(*[comp_db[ct] for ct in component_types]):
-                yield entity, [entity_db[entity][ct] for ct in component_types]
+            for entity in set.intersection(*[comp_db[ct.__name__] for ct in component_types]):
+                yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
         except KeyError:
             pass
 
