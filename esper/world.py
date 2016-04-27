@@ -228,9 +228,10 @@ class CachedWorld(World):
 class ParallelWorld(World):
     def __init__(self):
         super().__init__()
-        multiprocessing.set_start_method("spawn")
+        self._manager = multiprocessing.Manager()
+        # multiprocessing.set_start_method("spawn")
         self._components = {}
-        self._entities = {}
+        self._entities = self._manager.dict()
         self._local_processors = []
         self._spawn_processors = []
 
@@ -263,19 +264,44 @@ class ParallelWorld(World):
                 processor.join()
                 self._spawn_processors.remove(processor)
 
-    def remove_component(self, entity, component_type):
-        """Remove a Component instance from an Entity, by type."""
-        self._components[component_type].discard(entity)
+    def add_component(self, entity, component_instance):
+        """Add a new Component instance to an Entity."""
+        component_name = component_instance.__class__.__name__
 
-        if not self._components[component_type]:
-            del self._components[component_type]
+        comp_db = self._components
+        entity_db = self._entities
 
-        del self._entities[entity][component_type]
+        if component_name not in comp_db:
+            comp_db[component_name] = set()
 
-        if not self._entities[entity]:
-            del self._entities[entity]
+        comp_db[component_name].add(entity)
 
-        return entity
+        if entity not in entity_db:
+            entity_db[entity] = {}
+
+        entity_db[entity][component_name] = component_instance
+
+        self._entities = entity_db
+        self._components = comp_db
+
+    def get_component(self, component_type):
+        """Get an iterator for Entity, Component pairs."""
+        entity_db = self._entities
+        for entity in self._components.get(component_type.__name__, []):
+            yield entity, entity_db[entity][component_type.__name__]
+        self._entities = entity_db
+
+    def get_components(self, *component_types):
+        """Get an iterator for Entity and multiple Component sets."""
+        entity_db = self._entities
+        comp_db = self._components
+        try:
+            for entity in set.intersection(*[comp_db[ct.__name__] for ct in component_types]):
+                yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
+        except KeyError:
+            pass
+        self._entities = entity_db
+        self._components = comp_db
 
     def process(self, *args):
         for processor in self._spawn_processors:
