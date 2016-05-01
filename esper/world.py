@@ -91,7 +91,7 @@ class World:
         :return: True if the Entity has a Component of this type,
         otherwise False
         """
-        return component_type.__name__ in self._entities[entity]
+        return component_type in self._entities[entity]
 
     def add_component(self, entity, component_instance):
         """Add a new Component instance to an Entity.
