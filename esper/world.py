@@ -264,7 +264,7 @@ class ParallelWorld(World):
         self._components[component_type] = s
 
         if entity not in self._entities:
-            self._entities[entity] = {}
+            self._entities[entity] = self._manager.dict()
 
         e = self._entities[entity]
         e[component_type] = component_instance
