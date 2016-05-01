@@ -83,6 +83,16 @@ class World:
         except KeyError:
             pass
 
+    def has_component(self, entity, component_type):
+        """Check if a specific Entity has a Component of a certain type.
+
+        :param entity: The Entity you are querying.
+        :param component_type: The type of Component to check for.
+        :return: True if the Entity has a Component of this type,
+        otherwise False
+        """
+        return component_type.__name__ in self._entities[entity]
+
     def add_component(self, entity, component_instance):
         """Add a new Component instance to an Entity.
 
@@ -218,7 +228,6 @@ class CachedWorld(World):
 class ParallelWorld(World):
     def __init__(self):
         super().__init__()
-        # multiprocessing.set_start_method("spawn")
         self._manager = multiprocessing.Manager()
         self._components = self._manager.dict()
         self._entities = self._manager.dict()
@@ -235,6 +244,7 @@ class ParallelWorld(World):
             processor_instance.daemon = True
             processor_instance.start()
             self._spawn_processors.append(processor_instance)
+            self._spawn_processors.sort(key=lambda processor: -processor.priority)
         else:
             self._local_processors.append(processor_instance)
             self._local_processors.sort(key=lambda processor: -processor.priority)
@@ -254,32 +264,43 @@ class ParallelWorld(World):
                 self._spawn_processors.remove(processor)
 
     def add_component(self, entity, component_instance):
-        component_type = type(component_instance)
+        """Add a new Component instance to an Entity."""
+        component_name = component_instance.__class__.__name__
 
-        if component_type not in self._components:
-            self._components[component_type] = set()
+        comp_db = self._components
+        entity_db = self._entities
 
-        s = self._components[component_type]
-        s.add(entity)
-        self._components[component_type] = s
+        if component_name not in comp_db:
+            comp_db[component_name] = set()
 
-        if entity not in self._entities:
-            self._entities[entity] = self._manager.dict()
+        comp_db[component_name].add(entity)
 
-        e = self._entities[entity]
-        e[component_type] = component_instance
-        self._entities[entity] = e
+        if entity not in entity_db:
+            entity_db[entity] = {}
+
+        entity_db[entity][component_name] = component_instance
+
+        self._entities = entity_db
+        self._components = comp_db
 
     def get_component(self, component_type):
-        """Get an iterator for Entity, Component pairs.
+        """Get an iterator for Entity, Component pairs."""
+        entity_db = self._entities
+        for entity in self._components.get(component_type.__name__, []):
+            yield entity, entity_db[entity][component_type.__name__]
+        self._entities = entity_db
 
-        :param component_type: The Component type to retrieve.
-        :return: An iterator for (Entity, Component) tuples.
-        """
-        if component_type in self._components.keys():
-            entity_db = self._entities
-            for entity in self._components.get(component_type, []):
-                yield entity, entity_db[entity][component_type]
+    def get_components(self, *component_types):
+        """Get an iterator for Entity and multiple Component sets."""
+        entity_db = self._entities
+        comp_db = self._components
+        try:
+            for entity in set.intersection(*[comp_db[ct.__name__] for ct in component_types]):
+                yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
+        except KeyError:
+            pass
+        self._entities = entity_db
+        self._components = comp_db
 
     def process(self, *args):
         for processor in self._spawn_processors:

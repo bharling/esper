@@ -17,6 +17,8 @@ class ParallelProcessor(multiprocessing.Process):
         self._local_comp = None
         self.kill_switch = multiprocessing.Event()
         self.process_switch = multiprocessing.Event()
+        self.sync_switch = multiprocessing.Event()
+        self.queue = multiprocessing.SimpleQueue()
 
     def process(self, *args):
         raise NotImplementedError

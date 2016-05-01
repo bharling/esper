@@ -85,4 +85,4 @@ if __name__ == "__main__":
             world.remove_component(entity=3, component_type=Position)
             world.remove_component(entity=4, component_type=Position)
             world.remove_component(entity=5, component_type=Position)
-            # world.remove_processor(GravityProcessor)
+            world.remove_processor(GravityProcessor)
