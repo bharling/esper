@@ -96,7 +96,7 @@ class Brain:
 #############################
 # Set up some dummy entities:
 #############################
-def create_entities(number):
+def create_entities(world, number):
     for _ in range(number // 2):
         enemy = world.create_entity()
         world.add_component(enemy, Position())
@@ -138,7 +138,7 @@ results = {1: {}, 2: {}, 3: {}}
 result_times = []
 
 for amount in range(500, MAX_ENTITIES, 100):
-    create_entities(amount)
+    create_entities(world, amount)
     for _ in range(20):
         single_comp_query()
 
@@ -150,7 +150,7 @@ for amount in range(500, MAX_ENTITIES, 100):
     gc.collect()
 
 for amount in range(500, MAX_ENTITIES, 100):
-    create_entities(amount)
+    create_entities(world, amount)
     for _ in range(20):
         two_comp_query()
 
@@ -162,7 +162,7 @@ for amount in range(500, MAX_ENTITIES, 100):
     gc.collect()
 
 for amount in range(500, MAX_ENTITIES, 100):
-    create_entities(amount)
+    create_entities(world, amount)
     for _ in range(20):
         three_comp_query()
 
