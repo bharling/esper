@@ -1,10 +1,11 @@
 import esper
 
 from functools import lru_cache
+import time
 
 
 class World:
-    def __init__(self):
+    def __init__(self, debug=False):
         """A World object keeps track of all Entities, Components and Processors.
 
         A World contains a database of all Entity/Component assignments. It also
@@ -14,6 +15,9 @@ class World:
         self._next_entity_id = 0
         self._components = {}
         self._entities = {}
+        if debug:
+            self.process = self._timed_process
+            self.process_times = {}
 
     def clear_database(self):
         """Remove all entities and components from the world."""
@@ -196,11 +200,20 @@ class World:
         """Process all Systems, in order of their priority."""
         [processor.process(*args) for processor in self._processors]
 
+    def _timed_process(self, *args):
+        for processor in self._processors:
+            start_time = time.time()
+            processor.process(*args)
+            process_time = int(round((time.time() - start_time) * 1000, 2))
+            self.process_times[processor.__class__.__name__] = process_time
+
+        print(self.process_times)
+
 
 class CachedWorld(World):
-    def __init__(self, cache_size=128):
+    def __init__(self, cache_size=128, debug=False):
         """A sub-class of World using an LRU cache for Entity lookups."""
-        super().__init__()
+        super().__init__(debug=debug)
         self.set_cache_size(cache_size)
 
     def set_cache_size(self, size):
