@@ -2,6 +2,7 @@ import esper
 import multiprocessing
 
 from functools import lru_cache
+from esper.templates import SharedDict
 
 
 class World:
@@ -276,8 +277,8 @@ class ParallelWorld(World):
     def __init__(self):
         super().__init__()
         multiprocessing.set_start_method("spawn")
-        self._components = {}
-        self._entities = {}
+        self._components = SharedDict()
+        self._entities = SharedDict()
         self._local_processors = []
         self._spawn_processors = []
 
@@ -287,9 +288,7 @@ class ParallelWorld(World):
         processor_instance.priority = priority
 
         if issubclass(processor_instance.__class__, esper.ParallelProcessor):
-            processor_instance.world = World()
-            processor_instance.world.get_component = self.remote_get_component
-            processor_instance.world.get_components = self.remote_get_components
+            processor_instance.world = self
             processor_instance.daemon = True
             processor_instance.start()
             self._spawn_processors.append(processor_instance)
@@ -313,30 +312,21 @@ class ParallelWorld(World):
                 processor.join()
                 self._spawn_processors.remove(processor)
 
-    def remote_get_component(self, component_type):
-        print("Remote Get Component pid", multiprocessing.current_process().pid)
-        entity_db = self._entities
-        for entity in self._components.get(component_type, []):
-            yield entity, entity_db[entity][component_type]
-        print("Finished generating....", component_type, multiprocessing.current_process().pid)
-
-    def remote_get_components(self, *component_types):
-        print("Remote Get Components pid", multiprocessing.current_process().pid)
-        entity_db = self._entities
-        comp_db = self._components
-        try:
-            for entity in set.intersection(*[comp_db[ct] for ct in component_types]):
-                yield entity, [entity_db[entity][ct] for ct in component_types]
-        except KeyError:
-            pass
-        print("Finished generating....", component_types, multiprocessing.current_process().pid)
-
-    def sync_modified_components(self):
-        pass
-
     def process(self, *args):
+
+        self.sync()
+
+        if self._dead_entities:
+            for entity in self._dead_entities:
+                self.delete_entity(entity, immediate=True)
+            self._dead_entities.clear()
+
         for processor in self._spawn_processors:
             processor.process_switch.set()
 
         for processor in self._local_processors:
             processor.process()
+
+    def sync(self):
+        self._components.sync()
+        self._entities.sync()

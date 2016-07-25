@@ -98,12 +98,12 @@ if __name__ == "__main__":
     # Give the processes time to spawn:
     time.sleep(1)
 
-    for i in range(500):
+    for i in range(100):
         world.process()
         time.sleep(0.01)
-        if i == 250:
-            world.remove_component(entity=1, component_type=Position)
-            world.remove_component(entity=2, component_type=Position)
-            world.remove_component(entity=3, component_type=Position)
-            world.remove_component(entity=4, component_type=Position)
-            world.remove_component(entity=5, component_type=Position)
+        # if i == 50:
+        #     world.remove_component(entity=1, component_type=Position)
+        #     world.remove_component(entity=2, component_type=Position)
+        #     world.remove_component(entity=3, component_type=Position)
+        #     world.remove_component(entity=4, component_type=Position)
+        #     world.remove_component(entity=5, component_type=Position)
