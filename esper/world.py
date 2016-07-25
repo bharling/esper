@@ -1,4 +1,5 @@
 import esper
+import multiprocessing
 
 from functools import lru_cache
 from multiprocessing import Manager
@@ -334,3 +335,73 @@ mpman.RebuildProxy = RebuildProxyNoReferent
                 yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
         except KeyError:
             pass
+
+
+class ParallelWorld(World):
+    def __init__(self):
+        super().__init__()
+        multiprocessing.set_start_method("spawn")
+        self._components = {}
+        self._entities = {}
+        self._local_processors = []
+        self._spawn_processors = []
+
+    def add_processor(self, processor_instance, priority=0):
+        assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
+
+        processor_instance.priority = priority
+
+        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
+            processor_instance.world = World()
+            processor_instance.world.get_component = self.remote_get_component
+            processor_instance.world.get_components = self.remote_get_components
+            processor_instance.daemon = True
+            processor_instance.start()
+            self._spawn_processors.append(processor_instance)
+            self._spawn_processors.sort(key=lambda p: p.priority, reverse=True)
+        else:
+            processor_instance.world = self
+            self._local_processors.append(processor_instance)
+            self._local_processors.sort(key=lambda p: p.priority, reverse=True)
+
+    def remove_processor(self, processor_type):
+        # TODO: see if this can be simplified
+        for processor in self._local_processors:
+            if type(processor) == processor_type:
+                processor.world = None
+                self._local_processors.remove(processor)
+        for processor in self._spawn_processors:
+            if type(processor) == processor_type:
+                processor.world = None
+                processor.kill_switch.set()
+                processor.terminate()
+                processor.join()
+                self._spawn_processors.remove(processor)
+
+    def remote_get_component(self, component_type):
+        print("Remote Get Component pid", multiprocessing.current_process().pid)
+        entity_db = self._entities
+        for entity in self._components.get(component_type, []):
+            yield entity, entity_db[entity][component_type]
+        print("Finished generating....", component_type, multiprocessing.current_process().pid)
+
+    def remote_get_components(self, *component_types):
+        print("Remote Get Components pid", multiprocessing.current_process().pid)
+        entity_db = self._entities
+        comp_db = self._components
+        try:
+            for entity in set.intersection(*[comp_db[ct] for ct in component_types]):
+                yield entity, [entity_db[entity][ct] for ct in component_types]
+        except KeyError:
+            pass
+        print("Finished generating....", component_types, multiprocessing.current_process().pid)
+
+    def sync_modified_components(self):
+        pass
+
+    def process(self, *args):
+        for processor in self._spawn_processors:
+            processor.process_switch.set()
+
+        for processor in self._local_processors:
+            processor.process()
