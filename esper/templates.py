@@ -55,14 +55,15 @@ class SharedDict:
             pass
 
     def __getitem__(self, key):
-        self._internal_dict = pickle.loads(self._shared_array.raw)
-        return self._internal_dict[key]
+        temp_dict = pickle.loads(self._shared_array.raw)
+        return temp_dict[key]
 
     def __iter__(self):
         return self._internal_dict.__iter__()
 
     def __repr__(self):
-        return repr(self._internal_dict)
+        temp_dict = pickle.loads(self._shared_array.raw)
+        return repr(temp_dict)
 
     def __len__(self):
         return len(self._internal_dict)
@@ -74,7 +75,8 @@ class SharedDict:
         return self._internal_dict.clear()
 
     def copy(self):
-        return self._internal_dict.copy()
+        temp_dict = pickle.loads(self._shared_array.raw)
+        return temp_dict.copy()
 
     def pop(self, key, d=None):
         return self._internal_dict.pop(key, d)
