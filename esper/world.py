@@ -314,8 +314,6 @@ class ParallelWorld(World):
 
     def process(self, *args):
 
-        self.sync()
-
         if self._dead_entities:
             for entity in self._dead_entities:
                 self.delete_entity(entity, immediate=True)
@@ -326,7 +324,3 @@ class ParallelWorld(World):
 
         for processor in self._local_processors:
             processor.process()
-
-    def sync(self):
-        self._components.sync()
-        self._entities.sync()
