@@ -2,7 +2,7 @@ import esper
 import multiprocessing
 
 from functools import lru_cache
-from esper.templates import SharedDict
+from concurrent.futures import ProcessPoolExecutor
 
 
 class World:
@@ -274,13 +274,14 @@ class CachedWorld(World):
 
 
 class ParallelWorld(World):
-    def __init__(self):
+    def __init__(self, max_workers=None):
         super().__init__()
         multiprocessing.set_start_method("spawn")
-        self._components = SharedDict()
-        self._entities = SharedDict()
-        self._local_processors = []
-        self._spawn_processors = []
+        self._components = {}
+        self._entities = {}
+        self._processors = []
+        self._parallel_processors = []
+        self._executor = ProcessPoolExecutor(max_workers=max_workers)
 
     def add_processor(self, processor_instance, priority=0):
         assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
@@ -289,28 +290,23 @@ class ParallelWorld(World):
 
         if issubclass(processor_instance.__class__, esper.ParallelProcessor):
             processor_instance.world = self
-            processor_instance.daemon = True
-            processor_instance.start()
-            self._spawn_processors.append(processor_instance)
-            self._spawn_processors.sort(key=lambda p: p.priority, reverse=True)
+            self._parallel_processors.append(processor_instance)
+            self._parallel_processors.sort(key=lambda p: p.priority, reverse=True)
         else:
             processor_instance.world = self
-            self._local_processors.append(processor_instance)
-            self._local_processors.sort(key=lambda p: p.priority, reverse=True)
+            self._processors.append(processor_instance)
+            self._processors.sort(key=lambda p: p.priority, reverse=True)
 
     def remove_processor(self, processor_type):
         # TODO: see if this can be simplified
-        for processor in self._local_processors:
+        for processor in self._processors:
             if type(processor) == processor_type:
                 processor.world = None
-                self._local_processors.remove(processor)
-        for processor in self._spawn_processors:
+                self._processors.remove(processor)
+        for processor in self._parallel_processors:
             if type(processor) == processor_type:
                 processor.world = None
-                processor.kill_switch.set()
-                processor.terminate()
-                processor.join()
-                self._spawn_processors.remove(processor)
+                self._parallel_processors.remove(processor)
 
     def process(self, *args):
 
@@ -319,8 +315,12 @@ class ParallelWorld(World):
                 self.delete_entity(entity, immediate=True)
             self._dead_entities.clear()
 
-        for processor in self._spawn_processors:
-            processor.process_switch.set()
+        futures = []
+        for processor in self._parallel_processors:
+            payload = [(ent, comp) for ent, comp in self.get_components(processor.components)]
+            futures.append(self._executor.submit(processor.process, payload))
 
-        for processor in self._local_processors:
+        print(len(futures))
+
+        for processor in self._processors:
             processor.process()

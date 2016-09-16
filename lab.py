@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 ##################################
 class Processor:
     def __init__(self):
-        self.component_types = None
+        self.components = None
 
     def process(self, *args):
         raise NotImplementedError
@@ -27,6 +27,7 @@ class Position:
 class MoveProcessor(Processor):
     def __init__(self):
         super().__init__()
+        self.components = Velocity, Position
 
     def process(self, payload):
         ent, vel, pos = payload

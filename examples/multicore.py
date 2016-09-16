@@ -57,9 +57,9 @@ class ReportProcessor(esper.Processor):
 class GravityProcessor(esper.ParallelProcessor):
     def __init__(self):
         super().__init__()
+        self.components = Velocity, Position
 
-    def process(self):
-        print("Processing", self.name)
+    def process(self, payload):
         for ent, (vel, pos) in self.world.get_components(Velocity, Position):
             vel.y += 1
 
@@ -67,9 +67,9 @@ class GravityProcessor(esper.ParallelProcessor):
 class RelayProcessor(esper.ParallelProcessor):
     def __init__(self):
         super().__init__()
+        self.components = Velocity
 
-    def process(self):
-        print("Processing", self.name)
+    def process(self, payload):
         for ent, vel in self.world.get_component(Velocity):
             vel.x += 1
 
