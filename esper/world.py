@@ -283,17 +283,17 @@ class ParallelWorld(World):
         self._parallel_processors = []
         self._executor = ProcessPoolExecutor(max_workers=max_workers)
 
-    def add_processor(self, processor_instance, priority=0):
-        assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
+    def add_processor(self, processor_instance, priority=0, parallel=False):
+        assert issubclass(processor_instance.__class__, esper.Processor)
 
         processor_instance.priority = priority
+        processor_instance.parallel = parallel
+        processor_instance.world = self
 
-        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
-            processor_instance.world = self
+        if parallel:
             self._parallel_processors.append(processor_instance)
             self._parallel_processors.sort(key=lambda p: p.priority, reverse=True)
         else:
-            processor_instance.world = self
             self._processors.append(processor_instance)
             self._processors.sort(key=lambda p: p.priority, reverse=True)
 
@@ -317,10 +317,13 @@ class ParallelWorld(World):
 
         futures = []
         for processor in self._parallel_processors:
-            payload = [(ent, comp) for ent, comp in self.get_components(processor.components)]
-            futures.append(self._executor.submit(processor.process, payload))
+            if type(processor.components) is tuple:
+                payload = [(ent, comp) for ent, comp in self.get_components(processor.components)]
+            else:
+                payload = [(ent, comp) for ent, comp in self.get_component(processor.components)]
 
-        print(len(futures))
+            # futures.append(self._executor.submit(processor.process, payload))
+            print(type(processor.components), processor.__class__.__name__, payload)
 
         for processor in self._processors:
             processor.process()

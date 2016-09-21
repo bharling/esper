@@ -5,16 +5,7 @@ import pickle
 class Processor:
     def __init__(self):
         self.world = None
-        self.parallel = False
-
-    def process(self, *args):
-        raise NotImplementedError
-
-
-class ParallelProcessor:
-    def __init__(self):
-        self.world = None
-        self.parallel = True
+        self.components = None
 
     def process(self, *args):
         raise NotImplementedError

@@ -1,7 +1,6 @@
 import esper
 import random
 import time
-import multiprocessing
 
 
 #################################
@@ -47,30 +46,31 @@ class Position:
 class ReportProcessor(esper.Processor):
     def __init__(self):
         super().__init__()
+        self.components = Velocity
 
     def process(self):
         for ent, vel in self.world.get_component(Velocity):
             returned_vel = vel
-            print("Returned values:", returned_vel.x, returned_vel.y)
+            # print("Returned values:", returned_vel.x, returned_vel.y)
 
 
-class GravityProcessor(esper.ParallelProcessor):
+class GravityProcessor(esper.Processor):
     def __init__(self):
         super().__init__()
         self.components = Velocity, Position
 
     def process(self, payload):
-        for ent, (vel, pos) in self.world.get_components(Velocity, Position):
+        for ent, (vel, pos) in payload:
             vel.y += 1
 
 
-class RelayProcessor(esper.ParallelProcessor):
+class RelayProcessor(esper.Processor):
     def __init__(self):
         super().__init__()
         self.components = Velocity
 
     def process(self, payload):
-        for ent, vel in self.world.get_component(Velocity):
+        for ent, vel in payload:
             vel.x += 1
 
 
@@ -88,12 +88,9 @@ if __name__ == "__main__":
     world = esper.ParallelWorld()
     create_entities(world, 5)
 
-    report_proc = ReportProcessor()
-    gravity_proc = GravityProcessor()
-    relay_proc = RelayProcessor()
-    world.add_processor(report_proc)
-    world.add_processor(gravity_proc)
-    world.add_processor(relay_proc)
+    world.add_processor(ReportProcessor())
+    world.add_processor(GravityProcessor(), parallel=True)
+    world.add_processor(RelayProcessor(), parallel=True)
 
     # Give the processes time to spawn:
     time.sleep(1)
