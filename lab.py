@@ -1,55 +1,54 @@
-import pickle
-from multiprocessing import Array
+from concurrent.futures import ProcessPoolExecutor
 
 
-class _SharedDict:
+##################################
+#  Templates
+##################################
+class Processor:
+    def __init__(self):
+        self.components = None
 
-    __slots__ = ("size", "_shared_array", "_internal_dict")
+    def process(self, *args):
+        raise NotImplementedError
 
-    def __init__(self, size=80960):
-        self.size = size
-        self._shared_array = Array('c', size)
-        self._internal_dict = {}
 
-    def __setitem__(self, key, item):
-        print("set item")
-        self._internal_dict[key] = item
-        try:
-            self._shared_array.raw = pickle.dumps(self._internal_dict)
-        except ValueError("Buffer is too small to hold the dictionary."):
-            pass
+class Velocity:
+    def __init__(self, x=0, y=0):
+        self.x = x
+        self.y = y
 
-    def __getitem__(self, key):
-        print("get item")
-        self._internal_dict = pickle.loads(self._shared_array.raw)
-        return self._internal_dict[key]
 
-    def __repr__(self):
-        return repr(self._internal_dict)
+class Position:
+    def __init__(self, x=0, y=0):
+        self.x = x
+        self.y = y
 
-    def __len__(self):
-        return len(self._internal_dict)
 
-    def __delitem__(self, key):
-        del self._internal_dict[key]
+class MoveProcessor(Processor):
+    def __init__(self):
+        super().__init__()
+        self.components = Velocity, Position
 
-    def clear(self):
-        return self._internal_dict.clear()
+    def process(self, payload):
+        ent, vel, pos = payload
+        pos.x += vel.x
+        pos.y += vel.y
+        return payload
 
-    def copy(self):
-        return self._internal_dict.copy()
 
-    def pop(self, key, d=None):
-        return self._internal_dict.pop(key, d)
+##################################
+#  Test code:
+##################################
 
-    def get(self, key, default=None):
-        return self._internal_dict.get(key, default)
+move_processor = MoveProcessor()
+vel = Velocity(34, 5)
+pos = Position(20, 20)
 
-    def update(self, *args, **kwargs):
-        return self._internal_dict.update(*args, **kwargs)
+package = (1, vel, pos)
 
-    def keys(self):
-        return self._internal_dict.keys()
 
-    def values(self):
-        return self._internal_dict.values()
+procs = []
+with ProcessPoolExecutor() as executor:
+    future = executor.submit(move_processor.process, package)
+    ent, vel, pos = future.result()
+    print(pos.x, pos.y)

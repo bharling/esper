@@ -31,30 +31,8 @@ import multiprocessing
 
 class Velocity:
     def __init__(self, x=0.0, y=0.0):
-        self._x = multiprocessing.Value('f', x)
-        self._y = multiprocessing.Value('f', y)
-
-    @property
-    def x(self):
-        return self._x.value
-
-    @x.setter
-    def x(self, value):
-        self._x.value = value
-
-    @property
-    def y(self):
-        return self._y.value
-
-    @y.setter
-    def y(self, value):
-        self._y.value = value
-
-
-# class Velocity:
-#     def __init__(self, x=0.0, y=0.0):
-#         self.x = x
-#         self.y = y
+        self.x = x
+        self.y = y
 
 
 class Position:
@@ -79,9 +57,9 @@ class ReportProcessor(esper.Processor):
 class GravityProcessor(esper.ParallelProcessor):
     def __init__(self):
         super().__init__()
+        self.components = Velocity, Position
 
-    def process(self):
-        print("Processing", self.name)
+    def process(self, payload):
         for ent, (vel, pos) in self.world.get_components(Velocity, Position):
             vel.y += 1
 
@@ -89,9 +67,9 @@ class GravityProcessor(esper.ParallelProcessor):
 class RelayProcessor(esper.ParallelProcessor):
     def __init__(self):
         super().__init__()
+        self.components = Velocity
 
-    def process(self):
-        print("Processing", self.name)
+    def process(self, payload):
         for ent, vel in self.world.get_component(Velocity):
             vel.x += 1
 

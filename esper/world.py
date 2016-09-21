@@ -2,7 +2,7 @@ import esper
 import multiprocessing
 
 from functools import lru_cache
-from multiprocessing import Manager
+from concurrent.futures import ProcessPoolExecutor
 
 
 class World:
@@ -214,71 +214,6 @@ class World:
             processor.process(*args)
 
 
-class ParallelWorld(World):
-    def __init__(self):
-        super().__init__()
-        self._manager = Manager()
-        self._components = {}
-        self._entities = {}
-
-    def add_processor(self, processor_instance, priority=0):
-        assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
-        processor_instance.priority = priority
-        processor_instance.world = self
-        if issubclass(processor_instance.__class__, esper.ParallelProcessor):
-            processor_instance.daemon = True
-            processor_instance.start()
-        self._processors.append(processor_instance)
-        self._processors.sort(key=lambda processor: -processor.priority)
-
-    def remove_processor(self, processor_type):
-        for processor in self._processors:
-            if type(processor) == processor_type:
-                processor.world = None
-                if issubclass(processor.__class__, esper.ParallelProcessor):
-                    processor.join()
-                    processor.terminate()
-                self._processors.remove(processor)
-
-    def add_component(self, entity, component_instance):
-        # TODO: remove the *_proxy hacks when bug is fixed
-        component_type = type(component_instance)
-
-        if component_type not in self._components:
-            self._components[component_type] = self._manager.list()
-
-        comp_proxy = self._components[component_type]
-        comp_proxy.append(entity)
-        self._components[component_type] = comp_proxy
-
-        if entity not in self._entities:
-            self._entities[entity] = self._manager.dict()
-
-        ent_proxy = self._entities[entity]
-        ent_proxy[component_type] = component_instance
-        self._entities[entity] = ent_proxy
-
-    def delete_entity(self, entity):
-        for component_type in self._entities[entity]:
-            self._components[component_type].remove(entity)
-
-            if not self._components[component_type]:
-                del self._components[component_type]
-
-        del self._entities[entity]
-
-    def get_components(self, *component_types):
-        entity_db = self._entities
-        comp_db = self._components
-
-        try:
-            entity_set = set.intersection(*[set(comp_db[ct]) for ct in component_types])
-            for entity in entity_set:
-                yield entity, [entity_db[entity][ct] for ct in component_types]
-        except KeyError:
-            pass
-
-
 class CachedWorld(World):
     def __init__(self, cache_size=128):
         """A sub-class of World using an LRU cache for Entity lookups."""
@@ -293,8 +228,9 @@ class CachedWorld(World):
         wrapped = self._get_entities.__wrapped__.__get__(self, World)
         self._get_entities = lru_cache(size)(wrapped)
 
+    def cache_clear(self):
+        return self._get_entities.cache_clear()
 
-mpman.RebuildProxy = RebuildProxyNoReferent
     def cache_info(self):
         return self._get_entities.cache_info()
 
@@ -325,26 +261,27 @@ mpman.RebuildProxy = RebuildProxyNoReferent
     def _get_entities(self, component_types):
         """Return set of Entities having all given Components."""
         comp_db = self._components
-        return set.intersection(*[comp_db[ct.__name__] for ct in component_types])
+        return set.intersection(*[comp_db[ct] for ct in component_types])
 
     def get_components(self, *component_types):
         """Get an iterator for Entity and multiple Component sets."""
         entity_db = self._entities
         try:
             for entity in self._get_entities(component_types):
-                yield entity, [entity_db[entity][ct.__name__] for ct in component_types]
+                yield entity, [entity_db[entity][ct] for ct in component_types]
         except KeyError:
             pass
 
 
 class ParallelWorld(World):
-    def __init__(self):
+    def __init__(self, max_workers=None):
         super().__init__()
         multiprocessing.set_start_method("spawn")
         self._components = {}
         self._entities = {}
-        self._local_processors = []
-        self._spawn_processors = []
+        self._processors = []
+        self._parallel_processors = []
+        self._executor = ProcessPoolExecutor(max_workers=max_workers)
 
     def add_processor(self, processor_instance, priority=0):
         assert issubclass(processor_instance.__class__, (esper.Processor, esper.ParallelProcessor))
@@ -352,56 +289,38 @@ class ParallelWorld(World):
         processor_instance.priority = priority
 
         if issubclass(processor_instance.__class__, esper.ParallelProcessor):
-            processor_instance.world = World()
-            processor_instance.world.get_component = self.remote_get_component
-            processor_instance.world.get_components = self.remote_get_components
-            processor_instance.daemon = True
-            processor_instance.start()
-            self._spawn_processors.append(processor_instance)
-            self._spawn_processors.sort(key=lambda p: p.priority, reverse=True)
+            processor_instance.world = self
+            self._parallel_processors.append(processor_instance)
+            self._parallel_processors.sort(key=lambda p: p.priority, reverse=True)
         else:
             processor_instance.world = self
-            self._local_processors.append(processor_instance)
-            self._local_processors.sort(key=lambda p: p.priority, reverse=True)
+            self._processors.append(processor_instance)
+            self._processors.sort(key=lambda p: p.priority, reverse=True)
 
     def remove_processor(self, processor_type):
         # TODO: see if this can be simplified
-        for processor in self._local_processors:
+        for processor in self._processors:
             if type(processor) == processor_type:
                 processor.world = None
-                self._local_processors.remove(processor)
-        for processor in self._spawn_processors:
+                self._processors.remove(processor)
+        for processor in self._parallel_processors:
             if type(processor) == processor_type:
                 processor.world = None
-                processor.kill_switch.set()
-                processor.terminate()
-                processor.join()
-                self._spawn_processors.remove(processor)
-
-    def remote_get_component(self, component_type):
-        print("Remote Get Component pid", multiprocessing.current_process().pid)
-        entity_db = self._entities
-        for entity in self._components.get(component_type, []):
-            yield entity, entity_db[entity][component_type]
-        print("Finished generating....", component_type, multiprocessing.current_process().pid)
-
-    def remote_get_components(self, *component_types):
-        print("Remote Get Components pid", multiprocessing.current_process().pid)
-        entity_db = self._entities
-        comp_db = self._components
-        try:
-            for entity in set.intersection(*[comp_db[ct] for ct in component_types]):
-                yield entity, [entity_db[entity][ct] for ct in component_types]
-        except KeyError:
-            pass
-        print("Finished generating....", component_types, multiprocessing.current_process().pid)
-
-    def sync_modified_components(self):
-        pass
+                self._parallel_processors.remove(processor)
 
     def process(self, *args):
-        for processor in self._spawn_processors:
-            processor.process_switch.set()
 
-        for processor in self._local_processors:
+        if self._dead_entities:
+            for entity in self._dead_entities:
+                self.delete_entity(entity, immediate=True)
+            self._dead_entities.clear()
+
+        futures = []
+        for processor in self._parallel_processors:
+            payload = [(ent, comp) for ent, comp in self.get_components(processor.components)]
+            futures.append(self._executor.submit(processor.process, payload))
+
+        print(len(futures))
+
+        for processor in self._processors:
             processor.process()
